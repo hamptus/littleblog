@@ -1,5 +1,15 @@
 import os
+import shutil
+
 import click
+from . import little
+
+
+
+_PARENT_DIR = os.path.abspath(os.path.dirname(__file__))
+_SKEL_DIR = os.path.join(_PARENT_DIR, 'skel')
+_SKEL_TEMPLATES = os.path.join(_SKEL_DIR, 'templates')
+
 
 @click.group()
 def cli():
@@ -14,27 +24,26 @@ def start(project_name):
         click.echo('The directory "{}" already exists. Remove or rename the existing "{}" directory or choose a different project name.'.format(project_name, project_name))
         return
 
-    template_dir = os.path.join(project_name, 'templates')
+    shutil.copyfile(os.path.join(_PARENT_DIR, 'skel', 'settings.py'), os.path.join(project_name, 'settings.py'))
+    shutil.copytree(_SKEL_TEMPLATES, os.path.join(project_name, 'templates'))
     
-    os.makedirs(template_dir)
-
     os.makedirs(os.path.join(project_name, 'posts'))
- 
-    with open(os.path.join(project_name, 'settings.py'), 'w') as settings:
-        settings.write('#!/usr/bin/env python3\n')
 
-    open(os.path.join(template_dir, 'base.html'), 'w').close()
-
-
-    for fn in ('detail.html', 'list.html'):
-        with open(os.path.join(template_dir, fn), 'w') as f:
-            f.write("{% extends 'base.html' %}")
-            
     click.echo("Created {}".format(project_name))
 
 
+@click.command()
+@click.argument('project_name')
+def render(project_name):
+    settings = little.load_settings(project_name)
+    
+    if not settings: 
+        click.echo("Couldn't find settings.py in '{}'".format(project_name))
+        return
 cli.add_command(start)
+cli.add_command(render)
 
 
 if __name__ == '__main__':
+    print(_PARENT_DIR)
     cli()
