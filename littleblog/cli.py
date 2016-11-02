@@ -35,15 +35,15 @@ def start(project_name):
 @click.command()
 @click.argument('project_name')
 def render(project_name):
-    settings = little.load_settings(project_name)
     
-    if not settings: 
-        click.echo("Couldn't find settings.py in '{}'".format(project_name))
-        return
+    try:
+        little.render(project_name)
+    except little.SettingsNotFound:
+        click.echo('Couldn\'t find settings for "{}"'.format(project_name))
+
 cli.add_command(start)
 cli.add_command(render)
 
 
 if __name__ == '__main__':
-    print(_PARENT_DIR)
     cli()

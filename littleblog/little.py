@@ -6,6 +6,9 @@ from jinja2 import Environment, FileSystemLoader
 
 env = Environment(loader=FileSystemLoader('templates'))
 
+class SettingsNotFound(Exception):
+    pass
+
 
 def load_settings(project_name):
     """ Load the settings.py file from the specified project_name directory """
@@ -15,8 +18,13 @@ def load_settings(project_name):
     try:
         spec.loader.exec_module(settings)
     except FileNotFoundError:
-        return
+        raise SettingsNotFound("Couldin't find settings for '{}'".format(project_name))
   
     return settings
 
 
+def render(project_name):
+    settings = load_settings(project_name)
+    
+    env = Environment(loader=FileSystemLoader(settings.TEMPLATE_DIR))
+    print(env)
