@@ -2,14 +2,15 @@ from setuptools import setup
 
 setup(
     name='littleblog',
-    version='0.2.0',
+    version='0.2.2',
     description='littleblog - a simple static site generator',
     url='https://github.com/wookalar/littleblog',
     author='Wookalar Software',
     author_email='doc.tart@wookalar.io',
     license='AGPLv3',
     package_data={
-        'littleblog': ['skel/*.py', 'skel/templates/*.html'],
+        'littleblog': [
+            'skel/*.py', 'skel/templates/*.html', 'skel/static/*.css'],
     },
     install_requires=[
         'click>=6.6',
