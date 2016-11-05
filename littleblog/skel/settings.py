@@ -5,3 +5,5 @@
 CONTENT_DIR = 'posts'
 OUTPUT_DIR = 'html'
 TEMPLATE_DIR = 'templates'
+
+STATIC_DIR = 'static'
