@@ -55,6 +55,15 @@ def _render_list(posts, settings):
     return template.render(posts=posts)
 
 
+def _generate_posts_list(files, cur_dir, settings):
+    posts = []
+    for fn in files:
+        path = os.path.join(
+            cur_dir.replace(settings.CONTENT_DIR, '', 1), fn)
+        posts.append({'title': fn, 'path': path})
+    return posts
+
+
 def render(project_name):
     settings = load_settings(project_name)
 
@@ -111,14 +120,7 @@ def render(project_name):
                 with open(os.path.join(out_dir, 'index.html'), 'w') as indexf:
                     indexf.write(list_content)
         else:
-            posts = []
-            for sd in sub_dirs:
-                post_title = sd
-
-                post_path = os.path.join(
-                    current_directory.replace(settings.CONTENT_DIR, '', 1), sd)
-
-                posts.append({'title': post_title, 'path': post_path})
+            posts = _generate_posts_list(sub_dirs, current_directory, settings)
 
             if posts and not os.path.exists(os.path.join(out_dir, 'index.html')):
                 list_content = _render_list(posts, settings)
