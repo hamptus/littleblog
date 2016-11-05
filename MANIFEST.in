@@ -1,2 +1,2 @@
-include littleblog/skel/*.py
-include littleblog/skel/templates/*.html
+include skel/*.py
+include skel/templates/*.html
