@@ -41,14 +41,16 @@ def start(project_name):
 def render(project_name):
 
     try:
-        little.render(project_name)
+        b = little.Blog(project_name)
+        b.render()
     except little.SettingsNotFound:
         click.echo('Couldn\'t find settings for "{}"'.format(project_name))
 
 @click.command()
 @click.argument('project_name')
 def serve(project_name):
-    settings = little.load_settings(project_name)
+    b = little.Blog(project_name)
+    settings = b.settings
     os.chdir(settings.OUTPUT_DIR)
     handler = http.server.SimpleHTTPRequestHandler
     server = socketserver.TCPServer(("", 8080), handler)

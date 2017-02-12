@@ -1,4 +1,6 @@
 import os
+from operator import attrgetter
+import datetime
 import shutil
 
 import importlib.util
@@ -18,111 +20,162 @@ class SettingsNotFound(Exception):
     pass
 
 
-def load_settings(project_name):
-    """ Load the settings.py file from the specified project_name directory """
-    spec = importlib.util.spec_from_file_location(
-        'settings', os.path.join(project_name, 'settings.py'))
+class Blog:
 
-    settings = importlib.util.module_from_spec(spec)
+    def __init__(self, name, title=None):
+        self._load_settings(name)
+        self.title = title or name
 
-    try:
-        spec.loader.exec_module(settings)
-    except FileNotFoundError:
-        raise SettingsNotFound(
-            "Couldin't find settings for '{}'".format(project_name))
+    def __str__(self):
+        return self.title
 
-    settings.CONTENT_DIR = os.path.join(project_name, settings.CONTENT_DIR)
-    settings.OUTPUT_DIR = os.path.join(project_name, settings.OUTPUT_DIR)
-    settings.TEMPLATE_DIR = os.path.join(project_name, settings.TEMPLATE_DIR)
-    settings.STATIC_DIR = os.path.join(project_name, settings.STATIC_DIR)
+    def __repr__(self):
+        return self.__str__()
 
-    return settings
+    def _load_settings(self, name):
+        """ Load the settings.py file from the specified project_name directory """
+        spec = importlib.util.spec_from_file_location(
+            'settings', os.path.join(name, 'settings.py'))
 
+        settings = importlib.util.module_from_spec(spec)
 
-def _render_markdown(content):
-    return markdown.markdown(content, extensions=md_extensions)
+        try:
+            spec.loader.exec_module(settings)
+        except FileNotFoundError:
+            raise SettingsNotFound(
+                "Couldin't find settings for '{}'".format(name))
 
+        settings.CONTENT_DIR = os.path.join(name, settings.CONTENT_DIR)
+        settings.OUTPUT_DIR = os.path.join(name, settings.OUTPUT_DIR)
+        settings.TEMPLATE_DIR = os.path.join(name, settings.TEMPLATE_DIR)
+        settings.STATIC_DIR = os.path.join(name, settings.STATIC_DIR)
 
-def _render_detail(content, settings):
-    env = Environment(loader=FileSystemLoader(settings.TEMPLATE_DIR))
-    template = env.get_template('detail.html')
-    return template.render(content=content)
+        self.settings = settings
 
+    def _clear_old(self):
+        """Remove old content from output and static directories"""
+        # Remove the previously generated content
+        shutil.rmtree(self.settings.OUTPUT_DIR, ignore_errors=True)
 
-def _render_list(posts, settings):
-    env = Environment(loader=FileSystemLoader(settings.TEMPLATE_DIR))
-    template = env.get_template('list.html')
-    return template.render(posts=posts)
+    def _copy_static(self):
+        """Copy the contents of static to the output directory"""
 
+        from_dir = self.settings.STATIC_DIR
+        to_dir = os.path.join(
+            self.settings.OUTPUT_DIR,
+            os.path.basename(self.settings.STATIC_DIR)
+        )
 
-def _generate_posts_list(files, cur_dir, settings):
-    posts = []
-    for fn in files:
-        path = os.path.join(
-            cur_dir.replace(settings.CONTENT_DIR, '', 1), fn)
-        posts.append({'title': fn, 'path': path})
-    return posts
+        shutil.copytree(from_dir, to_dir)
 
+    def _populate_posts(self):
+        """Clear the posts attribute and repopulate it with published posts"""
+        self._posts = []
 
-def render(project_name):
-    settings = load_settings(project_name)
-
-    # Remove the previously generated content
-    shutil.rmtree(settings.OUTPUT_DIR, ignore_errors=True)
-
-    shutil.copytree(settings.STATIC_DIR, os.path.join(
-        settings.OUTPUT_DIR, os.path.basename(settings.STATIC_DIR)))
-
-    # Create the new output dir
-    os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
-
-    for current_directory, sub_dirs, files in os.walk(settings.CONTENT_DIR):
-
-        out_dir = current_directory.replace(
-            settings.CONTENT_DIR, settings.OUTPUT_DIR, 1)
-        os.makedirs(out_dir, exist_ok=True)
-
-        if files:
-
-            posts = []
-
+        for cur_dir, sub_dirs, files in os.walk(self.settings.CONTENT_DIR):
             for f in files:
-                with open(os.path.join(current_directory, f), 'r') as openf:
-                    content = openf.read()
+                filepath = os.path.join(cur_dir, f)
+                p = Post(self, filepath)
+                if p.published and p.published <= datetime.datetime.now():
+                    self._posts.append(p)
 
-                    post_title = None
+    @property
+    def posts(self):
+        try:
+            return sorted(
+                self._posts, key=attrgetter('published'), reverse=True)
+        except AttributeError:
+            return
 
-                    for line in content.split("\n"):
-                        if line.strip().startswith("# "):
-                            post_title = line.lstrip("#").strip()
-                            break
+    def _render_index(self):
+        env = Environment(loader=FileSystemLoader(self.settings.TEMPLATE_DIR))
+        template = env.get_template('list.html')
+        return template.render(posts=self.posts)
 
-                    md = _render_markdown(content)
+    def render(self):
+        """Render the contents of the output directory"""
+        self._clear_old()
+        # Create the new output dir
+        os.makedirs(self.settings.OUTPUT_DIR, exist_ok=True)
+        self._copy_static()
+        self._populate_posts()
+        # Write the detail page
+        for p in self.posts:
+            p.write()
+        # Write the main index
+        with open(os.path.join(self.settings.OUTPUT_DIR, 'index.html'), 'w') as out:
+            out.write(self._render_index())
 
-                if not post_title:
-                    post_title = os.path.splitext(f)[0]
 
-                html_content = _render_detail(md, settings)
-                fn = os.path.splitext(f)[0] + ".html"
+class Post:
 
-                out_path = os.path.join(out_dir, fn)
+    def __init__(self, blog, filepath):
+        self.blog = blog
+        self.filepath = filepath
 
-                fpath = os.path.join(
-                    current_directory.replace(settings.CONTENT_DIR, '', 1), fn)
+    def __str__(self):
+        return self.title or 'Untitled'
 
-                posts.append({'title': post_title, 'path': fpath})
+    def __repr__(self):
+        return self.__str__()
 
-                with open(out_path, 'w') as out:
-                    out.write(html_content)
+    @property
+    def content(self):
+        """Returns the full unrendered content of the post"""
+        with open(self.filepath) as f:
+            return f.read()
 
-            if not os.path.exists(os.path.join(out_dir, 'index.html')):
-                list_content = _render_list(posts, settings)
-                with open(os.path.join(out_dir, 'index.html'), 'w') as indexf:
-                    indexf.write(list_content)
-        else:
-            posts = _generate_posts_list(sub_dirs, current_directory, settings)
+    @property
+    def title(self):
+        """Returns the first H1 found in the page"""
+        for line in self.content.split("\n"):
+            if line.strip().startswith("# "):
+                return line.lstrip("#").strip()
 
-            if posts and not os.path.exists(os.path.join(out_dir, 'index.html')):
-                list_content = _render_list(posts, settings)
-                with open(os.path.join(out_dir, 'index.html'), 'w') as indexf:
-                    indexf.write(list_content)
+    @property
+    def published(self):
+        with open(self.filepath) as f:
+            try:
+                return datetime.datetime.strptime(
+                    f.readline().strip(), "%Y-%m-%dT%H:%M")
+            except ValueError:
+                return
+
+    @property
+    def _outdir(self):
+        content = self.blog.settings.CONTENT_DIR
+        output = self.blog.settings.OUTPUT_DIR
+        return os.path.dirname(self.filepath.replace(content, output, 1))
+
+    @property
+    def _outpath(self):
+        fn = os.path.basename(self.filepath)
+        return os.path.join(
+            self._outdir,
+            os.path.splitext(fn)[0] + ".html"
+        )
+
+    @property
+    def url(self):
+        return self._outpath.replace(self.blog.settings.OUTPUT_DIR, '', 1)
+
+    @property
+    def path(self):
+        return self.url
+
+    @property
+    def html(self):
+        """Returns the markdown rendered self.content"""
+        content = "\n".join(self.content.split("\n")[1:])
+        return markdown.markdown(content, extensions=md_extensions)
+
+    def render_detail(self):
+        settings = self.blog.settings
+        env = Environment(loader=FileSystemLoader(settings.TEMPLATE_DIR))
+        template = env.get_template('detail.html')
+        return template.render(content=self.html, page_title=self.title)
+
+    def write(self):
+        os.makedirs(self._outdir, exist_ok=True)
+        with open(self._outpath, 'w') as out:
+            out.write(self.render_detail())

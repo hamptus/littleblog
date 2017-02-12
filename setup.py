@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='littleblog',
-    version='0.2.2',
+    version='0.3.0',
     description='littleblog - a simple static site generator',
     url='https://github.com/wookalar/littleblog',
     author='Wookalar Software',
